@@ -1,6 +1,8 @@
 import os
 import time
 import collections
+import copy
+import matplotlib.pyplot as plt
 
 
 class SudokuSolver(object):
@@ -41,7 +43,7 @@ class SudokuSolver(object):
         return values
 
     def display(self, values):
-        """Display these values as a 2-D grid."""
+        """Display sudoku in dictionary form as a 2-D grid."""
         width = 1 + max(len(values[s]) for s in self.squares)
         line = '+'.join(['-' * (width * 3)] * 3)
         for r in self.rows:
@@ -155,6 +157,7 @@ class SudokuSolver(object):
     """
 
     def solve(self, grid):
+        """Solve sudoku grid."""
         return self.search(self.parse_grid(grid))
 
     def search(self, values):
@@ -190,27 +193,76 @@ class SudokuSolver(object):
         with open(filename) as f:
             return f.read().strip().split(sep)
 
-    def solve_all(self, grids):
-        """Attempt to solve a sequence of grids. Report results.
-        When showif is a number of seconds, display puzzles that take longer.
-        When showif is None, don't display any puzzles."""
+    def solve_all(self, grids, label=''):
+        """Attempt to solve a sequence of grids"""
 
         time_list = list()
         for grid in grids:
             start = time.clock()
             _ = self.solve(grid)
             t = time.clock() - start
-            print('Solved puzzle; took {0:.2f} second(s)'.format(t))
+            # print('Solved puzzle; took {0:.2f} second(s)'.format(t))
             time_list.append(t)
+        return {
+            'data': time_list,
+            'label': label
+        }
+
+    @staticmethod
+    def barplot(data_list, sort_data=True, title=''):
+
+        def _define_subplot(data, index, ylim, xlabel):
+            colors = ['black', 'black', 'blue', 'blue']
+            num_puzzles = range(1, 1 + len(data['data']))
+
+            plt.subplot(2, 2, index)
+            plt.bar(x=num_puzzles, height=data['data'], facecolor=colors[index-1], alpha=0.75, label=data['label'])
+            plt.gca().set_ylim([0, ylim])
+            plt.xlabel(xlabel)
+            plt.ylabel('Time to solve [s]')
+            plt.legend()
+            plt.grid(which='both', axis='y')
+
+        if sort_data:
+            for data in data_list:
+                data['data'] = sorted(data['data'])
+            xlabel = 'Puzzle index (sorted) [#]'
+        else:
+            xlabel = 'Puzzle index [#]'
+
+        # get max value
+        ylim = max([max(data['data']) for data in data_list])
+
+        plt.figure()
+        for counter, data in enumerate(data_list):
+            _define_subplot(data, counter+1, ylim=ylim+0.1, xlabel=xlabel)
+
+        plt.suptitle(title)
 
 
 def main():
+    NUM_PUZZLES = 10
+
+    grids_easy = SudokuSolver.from_file(os.path.join('grids', 'easy.txt'), sep='========')
+    grids_hard = SudokuSolver.from_file(os.path.join('grids', 'hard.txt'))
+
+    # classic algorithm
     sudoku_solver = SudokuSolver(use_naked_twins=False)
+    results_easy = sudoku_solver.solve_all(grids_easy[:NUM_PUZZLES], label='Easy')
+    results_hard = sudoku_solver.solve_all(grids_hard[:NUM_PUZZLES], label='Hard')
 
-    grids_easy = sudoku_solver.from_file(os.path.join('grids', 'easy.txt'), sep='========')
-    grids_hard = sudoku_solver.from_file(os.path.join('grids', 'hard.txt'))
+    # twins
+    sudoku_solver = SudokuSolver(use_naked_twins=True)
+    results_easy_twins = sudoku_solver.solve_all(grids_easy[:NUM_PUZZLES], label='Easy (twins)')
+    results_hard_twins = sudoku_solver.solve_all(grids_hard[:NUM_PUZZLES], label='Hard (twins)')
 
-    sudoku_solver.solve_all(grids_hard)
+    # plot results
+    results = [results_easy, results_hard, results_easy_twins, results_hard_twins]
+    SudokuSolver.barplot(copy.deepcopy(results), title='Sudoku solver algorithm comparison')
+    SudokuSolver.barplot(copy.deepcopy(results), sort_data=False, title='Per puzzle comparison')
+
+    # plot
+    plt.show()
 
 
 if __name__ == "__main__":
